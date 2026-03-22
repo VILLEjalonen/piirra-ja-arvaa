@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Piirrä & Arvaa 🎨</title>
+
+  <!-- ============================================================
+       FIREBASE SDK (v9 compat mode – toimii suoraan script-tagilla)
+       ============================================================ -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── RESET & TOKENS ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f0e17;
+      --surface:   #1a1929;
+      --card:      #232236;
+      --accent:    #ff6b6b;
+      --accent2:   #ffd166;
+      --accent3:   #06d6a0;
+      --text:      #fffffe;
+      --muted:     #a7a9be;
+      --radius:    14px;
+      --shadow:    0 8px 32px rgba(0,0,0,.45);
+    }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--surface);
+      border-bottom: 2px solid var(--card);
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .logo {
+      font-family: 'Fredoka One', cursive;
+      font-size: 1.5rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      white-space: nowrap;
+    }
+    #playerName {
+      font-size: .85rem;
+      color: var(--muted);
+    }
+    #playerName span { color: var(--accent2); font-weight: 800; }
+
+    /* ── SETUP SCREEN ───────────────────────────────────────────── */
+    #setupScreen {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .setup-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 36px 28px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+    .setup-card h1 {
+      font-family: 'Fredoka One', cursive;
+      font-size: 2.2rem;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .setup-card p { color: var(--muted); margin-bottom: 24px; font-size: .95rem; }
+    .setup-card input {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 2px solid var(--surface);
+      background: var(--surface);
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      font-size: 1rem;
+      outline: none;
+      margin-bottom: 14px;
+      transition: border-color .2s;
+    }
+    .setup-card input:focus { border-color: var(--accent); }
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #ff8e53);
+      color: #fff;
+      font-family: 'Fredoka One', cursive;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+      box-shadow: 0 4px 16px rgba(255,107,107,.4);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(255,107,107,.5); }
+    .btn-primary:active { transform: translateY(0); }
+
+    /* ── GAME SCREEN ────────────────────────────────────────────── */
+    #gameScreen {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    /* Word banner */
+    #wordBanner {
+      background: var(--surface);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      border-bottom: 2px solid var(--card);
+    }
+    #wordDisplay {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    #wordDisplay .label { color: var(--muted); font-size: .8rem; margin-right: 6px; }
+    #wordDisplay .word  { color: var(--accent2); }
+    #timerDisplay { font-size: .85rem; color: var(--muted); }
+    #timerDisplay span { color: var(--accent3); font-weight: 800; }
+
+    /* Main layout */
+    .game-body {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+    }
+    @media (max-width: 700px) {
+      .game-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    }
+
+    /* ── CANVAS AREA ────────────────────────────────────────────── */
+    .canvas-section {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      padding: 12px;
+      gap: 10px;
+      min-height: 0;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .color-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .color-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 3px solid transparent;
+      transition: transform .15s, border-color .15s;
+      flex-shrink: 0;
+    }
+    .color-dot:hover  { transform: scale(1.2); }
+    .color-dot.active { border-color: #fff; transform: scale(1.2); }
+
+    .size-slider {
+      -webkit-appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--surface);
+      outline: none;
+      width: 80px;
+      cursor: pointer;
+    }
+    .size-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .tool-btn {
+      padding: 7px 12px;
+      border-radius: 8px;
+      border: 2px solid var(--card);
+      background: var(--card);
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      font-size: .8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .tool-btn:hover  { border-color: var(--accent); }
+    .tool-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .tool-btn.danger { border-color: #ff4444; }
+    .tool-btn.danger:hover { background: #ff4444; }
+
+    /* Canvas wrapper – prevents page scroll on touch */
+    .canvas-wrap {
+      flex: 1;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #fff;
+      touch-action: none;
+      position: relative;
+      min-height: 200px;
+    }
+    #drawCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    #drawCanvas.readonly { cursor: default; }
+
+    /* Drawer claim */
+    #drawerBanner {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: .9rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #drawerBanner .info { color: var(--muted); }
+    #drawerBanner .info strong { color: var(--accent3); }
+    #claimBtn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent3), #00b894);
+      color: #fff;
+      font-family: 'Fredoka One', cursive;
+      font-size: .95rem;
+      cursor: pointer;
+      transition: transform .15s;
+      white-space: nowrap;
+    }
+    #claimBtn:hover { transform: translateY(-1px); }
+    #claimBtn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    /* Word input for drawer */
+    #wordInputArea {
+      display: none;
+      gap: 8px;
+    }
+    #wordInputArea input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 2px solid var(--accent2);
+      background: var(--surface);
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      font-size: .95rem;
+      outline: none;
+    }
+    #wordInputArea button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent2);
+      color: #111;
+      font-family: 'Fredoka One', cursive;
+      cursor: pointer;
+    }
+
+    /* ── SIDEBAR ────────────────────────────────────────────────── */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-left: 2px solid var(--card);
+      min-height: 0;
+    }
+    @media (max-width: 700px) {
+      .sidebar { border-left: none; border-top: 2px solid var(--card); height: 260px; }
+    }
+
+    .sidebar-tab {
+      display: flex;
+      border-bottom: 2px solid var(--card);
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: .85rem;
+      cursor: pointer;
+      transition: color .15s, background .15s;
+    }
+    .tab-btn.active { color: var(--text); background: var(--card); }
+
+    /* Players list */
+    #playersList {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      padding: 12px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    #playersList.visible { display: flex; }
+    .player-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--card);
+      border-radius: 8px;
+      font-size: .9rem;
+    }
+    .player-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent3); flex-shrink: 0; }
+    .player-name { flex: 1; font-weight: 700; }
+    .player-score { color: var(--accent2); font-weight: 800; font-size: .85rem; }
+
+    /* Chat */
+    #chatArea {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    #chatMessages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .chat-msg {
+      font-size: .85rem;
+      line-height: 1.4;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--card);
+      animation: fadeIn .2s ease;
+    }
+    .chat-msg.correct {
+      background: rgba(6,214,160,.15);
+      border: 1px solid var(--accent3);
+    }
+    .chat-msg .author { font-weight: 800; margin-right: 5px; }
+    .chat-msg.system { color: var(--muted); background: none; font-style: italic; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    .chat-input-row {
+      display: flex;
+      gap: 6px;
+      padding: 8px;
+      border-top: 2px solid var(--card);
+    }
+    .chat-input-row input {
+      flex: 1;
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 2px solid var(--card);
+      background: var(--card);
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .chat-input-row input:focus { border-color: var(--accent); }
+    .chat-input-row button {
+      padding: 9px 14px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-family: 'Fredoka One', cursive;
+      cursor: pointer;
+      font-size: .9rem;
+      transition: transform .1s;
+    }
+    .chat-input-row button:active { transform: scale(.95); }
+
+    /* Scrollbar style */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--card); border-radius: 4px; }
+
+    /* ── TOAST ──────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--accent3);
+      color: #111;
+      padding: 10px 22px;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: .95rem;
+      transition: transform .3s;
+      z-index: 999;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── CONFIG NOTICE ──────────────────────────────────────────── */
+    #configNotice {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 24px;
+    }
+    #configNotice .box {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+      max-width: 480px;
+      width: 100%;
+    }
+    #configNotice h2 { font-family: 'Fredoka One', cursive; color: var(--accent); margin-bottom: 12px; }
+    #configNotice p  { color: var(--muted); font-size: .9rem; margin-bottom: 10px; line-height: 1.6; }
+    #configNotice code {
+      display: block;
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: .82rem;
+      color: var(--accent2);
+      margin: 8px 0 16px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    #configNotice button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-family: 'Fredoka One', cursive;
+      font-size: 1.05rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ================================================================
+     FIREBASE CONFIG NOTICE – näytetään jos config puuttuu
+     ================================================================ -->
+<div id="configNotice">
+  <div class="box">
+    <h2>🔥 Firebase-asetukset puuttuvat</h2>
+    <p>Ennen kuin peli toimii, sinun täytyy:</p>
+    <p><strong>1.</strong> Mene <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent2)">console.firebase.google.com</a>
+       → Luo projekti → Realtime Database → Luo tietokanta (test mode).</p>
+    <p><strong>2.</strong> Kopioi projektisi firebaseConfig (Project Settings → Your apps → Web app).</p>
+    <p><strong>3.</strong> Liitä arvot tiedoston alkuun muuttujiin:</p>
+    <code>const FIREBASE_CONFIG = {
+  apiKey:            "AIza...",
+  authDomain:        "projekti.firebaseapp.com",
+  databaseURL:       "https://projekti-default-rtdb.firebaseio.com",
+  projectId:         "projekti-id",
+  storageBucket:     "projekti.appspot.com",
+  messagingSenderId: "123456789",
+  appId:             "1:123...:web:abc..."
+};</code>
+    <p><strong>4.</strong> Julkaise tiedosto Netlifyssä tai GitHub Pagesissa.</p>
+    <button onclick="document.getElementById('configNotice').style.display='none'">
+      Minulla on jo config – jatka →
+    </button>
+  </div>
+</div>
+
+<!-- ================================================================
+     HEADER
+     ================================================================ -->
+<header>
+  <div class="logo">🎨 Piirrä &amp; Arvaa</div>
+  <div id="playerName">Ei kirjauduttu</div>
+</header>
+
+<!-- ================================================================
+     SETUP SCREEN – käyttäjänimi
+     ================================================================ -->
+<div id="setupScreen">
+  <div class="setup-card">
+    <h1>🎮 Tervetuloa!</h1>
+    <p>Syötä nimesi ja liity peliin. Jaa linkki kavereille – he liittyvät automaattisesti.</p>
+    <input id="nameInput" type="text" placeholder="Nimesi..." maxlength="20" autocomplete="off" />
+    <button class="btn-primary" onclick="joinGame()">Liity peliin 🚀</button>
+  </div>
+</div>
+
+<!-- ================================================================
+     GAME SCREEN
+     ================================================================ -->
+<div id="gameScreen">
+
+  <!-- Word banner -->
+  <div id="wordBanner">
+    <div id="wordDisplay"><span class="label">Sana:</span><span class="word" id="currentWordText">–</span></div>
+    <div id="timerDisplay">Aika: <span id="timerVal">–</span>s</div>
+  </div>
+
+  <div class="game-body">
+
+    <!-- ── CANVAS SECTION ───────────────────────────────────────── -->
+    <div class="canvas-section">
+
+      <!-- Toolbar (vain piirtäjälle aktiivinen) -->
+      <div class="toolbar" id="toolbar">
+        <!-- Värit -->
+        <div class="color-row" id="colorRow"></div>
+        <!-- Koko -->
+        <input type="range" class="size-slider" id="brushSize" min="2" max="40" value="6" />
+        <!-- Eraser -->
+        <button class="tool-btn" id="eraserBtn" onclick="toggleEraser()">🧹 Pyyhekumi</button>
+        <!-- Tyhjennä -->
+        <button class="tool-btn danger" onclick="clearCanvas()">🗑️ Tyhjennä</button>
+      </div>
+
+      <!-- Canvas -->
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="drawCanvas"></canvas>
+      </div>
+
+      <!-- Drawer banner -->
+      <div id="drawerBanner">
+        <div class="info">Piirtäjä: <strong id="drawerNameLabel">–</strong></div>
+        <button id="claimBtn" onclick="claimDrawer()">✏️ Haluan piirtää!</button>
+      </div>
+
+      <!-- Word input (vain piirtäjälle) -->
+      <div id="wordInputArea" style="display:flex">
+        <input id="wordInput" type="text" placeholder="Kirjoita piirrettävä sana..." maxlength="30" autocomplete="off" />
+        <button onclick="setWord()">Aseta sana ✅</button>
+      </div>
+
+    </div><!-- /canvas-section -->
+
+    <!-- ── SIDEBAR ───────────────────────────────────────────────── -->
+    <div class="sidebar">
+      <div class="sidebar-tab">
+        <button class="tab-btn active" onclick="showTab('chat')">💬 Chat</button>
+        <button class="tab-btn"        onclick="showTab('players')">👥 Pelaajat</button>
+      </div>
+
+      <!-- Players -->
+      <div id="playersList"></div>
+
+      <!-- Chat -->
+      <div id="chatArea">
+        <div id="chatMessages"></div>
+        <div class="chat-input-row">
+          <input id="chatInput" type="text" placeholder="Kirjoita arvaus..." maxlength="80"
+                 autocomplete="off" onkeydown="if(event.key==='Enter')sendChat()" />
+          <button onclick="sendChat()">→</button>
+        </div>
+      </div>
+    </div><!-- /sidebar -->
+
+  </div><!-- /game-body -->
+</div><!-- /gameScreen -->
+
+<!-- Toast notification -->
+<div id="toast"></div>
+
+<!-- ================================================================
+     JAVASCRIPT
+     ================================================================ -->
+<script>
+/* ============================================================
+   1. FIREBASE CONFIGURATION
+   Vaihda nämä arvot omiin Firebase-projektin arvoihisi!
+   ============================================================ */
+const FIREBASE_CONFIG = {
+  apiKey:            "SINUN_API_KEY",
+  authDomain:        "SINUN_AUTH_DOMAIN",
+  databaseURL:       "SINUN_DATABASE_URL",
+  projectId:         "SINUN_PROJECT_ID",
+  storageBucket:     "SINUN_STORAGE_BUCKET",
+  messagingSenderId: "SINUN_MESSAGING_SENDER_ID",
+  appId:             "SINUN_APP_ID"
+};
+
+/* ============================================================
+   2. TARKISTA ONKO CONFIG ASETETTU
+   ============================================================ */
+const isConfigured = !Object.values(FIREBASE_CONFIG).some(v => v.startsWith("SINUN_"));
+if (isConfigured) {
+  document.getElementById('configNotice').style.display = 'none';
+}
+
+/* ============================================================
+   3. FIREBASE INIT
+   ============================================================ */
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+
+/* ============================================================
+   4. GAME STATE
+   ============================================================ */
+let myId       = null;   // Oma pelaaja-id
+let myName     = '';     // Oma nimi
+let isDrawer   = false;  // Onko minä piirtäjä
+let currentDrawerId = null;
+let currentWord = '';
+let erasing    = false;
+let currentColor = '#222222';
+let brushSize  = 6;
+
+// Canvas drawing state
+let isDrawing  = false;
+let lastX = 0, lastY = 0;
+
+// Timer
+let timerInterval = null;
+let timerEnd = null;
+
+/* ============================================================
+   5. CANVAS SETUP
+   ============================================================ */
+const canvas = document.getElementById('drawCanvas');
+const ctx    = canvas.getContext('2d');
+
+// Resizoi canvas fyysiseksi kooksi
+function resizeCanvas() {
+  const wrap = document.getElementById('canvasWrap');
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  // Tallenna kuva ennen resizea
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  canvas.width  = w;
+  canvas.height = h;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  try { ctx.putImageData(imgData, 0, 0); } catch(e) {}
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+/* ============================================================
+   6. VÄRIT
+   ============================================================ */
+const COLORS = [
+  '#222222','#ffffff','#e74c3c','#e67e22','#f1c40f',
+  '#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e8c',
+  '#795548','#607d8b'
+];
+
+function buildColorPicker() {
+  const row = document.getElementById('colorRow');
+  row.innerHTML = '';
+  COLORS.forEach(c => {
+    const dot = document.createElement('div');
+    dot.className = 'color-dot' + (c === currentColor ? ' active' : '');
+    dot.style.background = c;
+    dot.style.border = c === '#ffffff' ? '3px solid #888' : '';
+    dot.onclick = () => selectColor(c);
+    row.appendChild(dot);
+  });
+}
+
+function selectColor(c) {
+  currentColor = c;
+  erasing = false;
+  document.getElementById('eraserBtn').classList.remove('active');
+  buildColorPicker();
+}
+
+function toggleEraser() {
+  erasing = !erasing;
+  document.getElementById('eraserBtn').classList.toggle('active', erasing);
+}
+
+document.getElementById('brushSize').addEventListener('input', e => {
+  brushSize = parseInt(e.target.value);
+});
+
+/* ============================================================
+   7. PIIRTÄMINEN – hiiri ja kosketus
+   ============================================================ */
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  let cx, cy;
+  if (e.touches) {
+    cx = (e.touches[0].clientX - rect.left) * scaleX;
+    cy = (e.touches[0].clientY - rect.top)  * scaleY;
+  } else {
+    cx = (e.clientX - rect.left) * scaleX;
+    cy = (e.clientY - rect.top)  * scaleY;
+  }
+  return [cx, cy];
+}
+
+function startDraw(e) {
+  if (!isDrawer) return;
+  e.preventDefault();
+  isDrawing = true;
+  [lastX, lastY] = getPos(e);
+}
+
+function draw(e) {
+  if (!isDrawer || !isDrawing) return;
+  e.preventDefault();
+  const [x, y] = getPos(e);
+  const color = erasing ? '#ffffff' : currentColor;
+  const size  = erasing ? brushSize * 3 : brushSize;
+
+  drawLine(lastX, lastY, x, y, color, size);
+
+  // Lähetä piirtopiste Firebaseen
+  db.ref('game/strokes').push({
+    x0: lastX, y0: lastY, x1: x, y1: y,
+    color, size,
+    t: Date.now()
+  });
+
+  [lastX, lastY] = [x, y];
+}
+
+function endDraw(e) { isDrawing = false; }
+
+function drawLine(x0, y0, x1, y1, color, size) {
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = size;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  ctx.stroke();
+}
+
+// Hiiri
+canvas.addEventListener('mousedown',  startDraw);
+canvas.addEventListener('mousemove',  draw);
+canvas.addEventListener('mouseup',    endDraw);
+canvas.addEventListener('mouseleave', endDraw);
+
+// Kosketus – estä myös selailun scrollaus
+canvas.addEventListener('touchstart', startDraw, { passive: false });
+canvas.addEventListener('touchmove',  draw,      { passive: false });
+canvas.addEventListener('touchend',   endDraw);
+
+/* ============================================================
+   8. TYHJENNÄ CANVAS
+   ============================================================ */
+function clearCanvas() {
+  if (!isDrawer) return;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Poista kaikki viivat Firebasesta
+  db.ref('game/strokes').remove();
+  db.ref('game/clearEvent').set(Date.now());
+}
+
+/* ============================================================
+   9. LIITY PELIIN
+   ============================================================ */
+function joinGame() {
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) { showToast('Anna nimesi ensin!'); return; }
+  if (!isConfigured) { showToast('Firebase-config puuttuu!'); return; }
+
+  myName = name;
+  myId   = db.ref('game/players').push().key; // Uniikki id
+
+  // Tallenna pelaaja Firebaseen
+  const playerRef = db.ref(`game/players/${myId}`);
+  playerRef.set({ name: myName, score: 0, online: true });
+  // Poista pelaaja kun selain suljetaan
+  playerRef.onDisconnect().remove();
+
+  // Vaihda näkymä
+  document.getElementById('setupScreen').style.display  = 'none';
+  document.getElementById('gameScreen').style.display   = 'flex';
+  document.getElementById('playerName').innerHTML       =
+    `Pelaajana: <span>${myName}</span>`;
+
+  buildColorPicker();
+  initListeners();
+  resizeCanvas();
+
+  // Piirrä aiemmat viivat
+  replayStrokes();
+}
+
+/* ============================================================
+   10. FIREBASE KUUNTELIJAT
+   ============================================================ */
+function initListeners() {
+
+  // --- Pelaajat ---
+  db.ref('game/players').on('value', snap => {
+    const players = snap.val() || {};
+    renderPlayers(players);
+  });
+
+  // --- Piirtäjä ---
+  db.ref('game/drawer').on('value', snap => {
+    const data = snap.val();
+    currentDrawerId = data ? data.id : null;
+    isDrawer = (currentDrawerId === myId);
+    updateDrawerUI(data ? data.name : null);
+  });
+
+  // --- Sana ---
+  db.ref('game/word').on('value', snap => {
+    const wordData = snap.val();
+    currentWord = wordData ? wordData.word : '';
+    const hiddenWord = isDrawer ? currentWord : maskWord(currentWord);
+    document.getElementById('currentWordText').textContent = hiddenWord || '–';
+    document.getElementById('wordInputArea').style.display =
+      isDrawer ? 'flex' : 'none';
+  });
+
+  // --- Chat-viestit ---
+  db.ref('game/chat').on('child_added', snap => {
+    renderChatMessage(snap.val());
+  });
+
+  // --- Uudet piirtoviivat reaaliajassa ---
+  db.ref('game/strokes').on('child_added', snap => {
+    if (!isDrawer) { // Piirtäjälle piirretään jo lokaalisesti
+      const d = snap.val();
+      drawLine(d.x0, d.y0, d.x1, d.y1, d.color, d.size);
+    }
+  });
+
+  // --- Tyhjennys ---
+  db.ref('game/clearEvent').on('value', snap => {
+    if (snap.val()) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  });
+
+  // --- Timer ---
+  db.ref('game/timer').on('value', snap => {
+    const data = snap.val();
+    if (data && data.end) startClientTimer(data.end);
+    else document.getElementById('timerVal').textContent = '–';
+  });
+}
+
+/* ============================================================
+   11. REPLAY VANHAT PIIRROKSET
+   ============================================================ */
+function replayStrokes() {
+  db.ref('game/strokes').once('value', snap => {
+    const strokes = snap.val();
+    if (!strokes) return;
+    Object.values(strokes).sort((a,b) => a.t - b.t).forEach(d => {
+      drawLine(d.x0, d.y0, d.x1, d.y1, d.color, d.size);
+    });
+  });
+}
+
+/* ============================================================
+   12. PIIRTÄJÄ – ota / vapauta
+   ============================================================ */
+function claimDrawer() {
+  if (currentDrawerId && currentDrawerId !== myId) {
+    showToast('Joku toinen piirtää jo!');
+    return;
+  }
+  if (currentDrawerId === myId) {
+    // Vapauta piirtäjä
+    db.ref('game/drawer').remove();
+    db.ref('game/word').remove();
+    db.ref('game/timer').remove();
+    return;
+  }
+  db.ref('game/drawer').set({ id: myId, name: myName });
+  // Käynnistä 3 min timer
+  const end = Date.now() + 3 * 60 * 1000;
+  db.ref('game/timer').set({ end });
+}
+
+function updateDrawerUI(drawerName) {
+  const label = document.getElementById('drawerNameLabel');
+  const btn   = document.getElementById('claimBtn');
+  const canvas = document.getElementById('drawCanvas');
+
+  label.textContent = drawerName || '–';
+  canvas.classList.toggle('readonly', !isDrawer);
+
+  if (isDrawer) {
+    btn.textContent = '🛑 Lopeta piirtäminen';
+    document.getElementById('wordInputArea').style.display = 'flex';
+    document.getElementById('toolbar').style.opacity = '1';
+    document.getElementById('toolbar').style.pointerEvents = 'auto';
+  } else {
+    btn.textContent = '✏️ Haluan piirtää!';
+    btn.disabled = !!currentDrawerId && currentDrawerId !== myId;
+    document.getElementById('wordInputArea').style.display = 'none';
+    document.getElementById('toolbar').style.opacity = '0.4';
+    document.getElementById('toolbar').style.pointerEvents = 'none';
+  }
+}
+
+/* ============================================================
+   13. SANA
+   ============================================================ */
+function setWord() {
+  const word = document.getElementById('wordInput').value.trim();
+  if (!word) return;
+  db.ref('game/word').set({ word });
+  document.getElementById('wordInput').value = '';
+  showToast(`Sana asetettu: ${word}`);
+}
+
+// Peitä sana ei-piirtäjiltä: "koira" → "_ _ _ _ _"
+function maskWord(w) {
+  if (!w) return '–';
+  return w.split('').map(c => c === ' ' ? '  ' : '_').join(' ');
+}
+
+/* ============================================================
+   14. CHAT & ARVAUKSET
+   ============================================================ */
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const text  = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  const correct = currentWord &&
+    text.toLowerCase().replace(/\s/g,'') ===
+    currentWord.toLowerCase().replace(/\s/g,'');
+
+  db.ref('game/chat').push({
+    author: myName,
+    text,
+    correct,
+    t: Date.now()
+  });
+
+  if (correct) {
+    // Lisää pisteitä
+    db.ref(`game/players/${myId}/score`).transaction(s => (s || 0) + 10);
+    showToast('✅ Oikein! +10 pistettä');
+  }
+}
+
+function renderChatMessage(msg) {
+  const box = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg' + (msg.correct ? ' correct' : '') +
+                  (msg.system ? ' system' : '');
+
+  if (msg.system) {
+    div.textContent = msg.text;
+  } else {
+    div.innerHTML =
+      `<span class="author" style="color:${colorForName(msg.author)}">${msg.author}:</span>` +
+      escHtml(msg.text) +
+      (msg.correct ? ' ✅' : '');
+  }
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// Yksinkertainen deterministinen väri nimelle
+function colorForName(name) {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `hsl(${h},70%,65%)`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ============================================================
+   15. PELAAJAT LISTA
+   ============================================================ */
+function renderPlayers(players) {
+  const list = document.getElementById('playersList');
+  list.innerHTML = '';
+  Object.entries(players)
+    .sort(([,a],[,b]) => (b.score||0) - (a.score||0))
+    .forEach(([id, p]) => {
+      const div = document.createElement('div');
+      div.className = 'player-item';
+      div.innerHTML =
+        `<div class="player-dot" style="background:${colorForName(p.name)}"></div>` +
+        `<div class="player-name">${escHtml(p.name)}${id===myId?' (sinä)':''}</div>` +
+        `<div class="player-score">${p.score||0} pts</div>`;
+      list.appendChild(div);
+    });
+}
+
+/* ============================================================
+   16. TIMER
+   ============================================================ */
+function startClientTimer(endTs) {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const left = Math.max(0, Math.round((endTs - Date.now()) / 1000));
+    document.getElementById('timerVal').textContent = left;
+    if (left === 0) clearInterval(timerInterval);
+  }, 1000);
+}
+
+/* ============================================================
+   17. TABS
+   ============================================================ */
+function showTab(tab) {
+  const btns = document.querySelectorAll('.tab-btn');
+  const chat    = document.getElementById('chatArea');
+  const players = document.getElementById('playersList');
+  btns.forEach((b,i) => b.classList.toggle('active', i === (tab==='chat'?0:1)));
+  chat.style.display    = tab === 'chat'    ? 'flex'  : 'none';
+  players.classList.toggle('visible', tab === 'players');
+}
+
+/* ============================================================
+   18. TOAST NOTIFIKAATIO
+   ============================================================ */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+/* ============================================================
+   19. KÄYNNISTYS – tarkista config
+   ============================================================ */
+window.addEventListener('load', () => {
+  if (!isConfigured) {
+    // Config puuttuu – jätetään notice näkyviin
+    document.getElementById('setupScreen').style.display = 'none';
+  }
+});
+</script>
+</body>
+</html>
