@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>Piirrä & Arvaa 🎨</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet"/>
+
+  <!-- ✅ Supabase – ei asennuksia, toimii suoraan selaimessa -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#fdf6ec;--card:#fff;--ink:#1a1208;--muted:#7a6a55;
+      --red:#e8441a;--yellow:#f5a623;--green:#1a9e6e;--border:#e8e0d6;
+      --r:12px;--sh:0 4px 20px rgba(26,18,8,.10);
+    }
+    body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--ink);min-height:100dvh;display:flex;flex-direction:column}
+
+    /* HEADER */
+    header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--ink);gap:10px;flex-wrap:wrap}
+    .logo{font-family:'Fredoka One',cursive;font-size:1.4rem;color:var(--yellow)}
+    .logo span{color:#fff}
+    #statusBar{font-size:.8rem;color:#aaa;font-weight:700}
+    #statusBar b{color:var(--yellow)}
+
+    /* SETUP */
+    #setupScreen{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:var(--card);border-radius:20px;padding:36px 28px;max-width:360px;width:100%;text-align:center;box-shadow:var(--sh);border:2px solid var(--border)}
+    .card .em{font-size:3rem;margin-bottom:10px}
+    .card h1{font-family:'Fredoka One',cursive;font-size:1.9rem;color:var(--red);margin-bottom:6px}
+    .card p{color:var(--muted);font-size:.9rem;margin-bottom:20px;line-height:1.5}
+    .card input{width:100%;padding:12px 14px;border-radius:10px;border:2px solid var(--border);background:var(--bg);color:var(--ink);font-family:'Nunito',sans-serif;font-size:1rem;outline:none;margin-bottom:12px;transition:border-color .2s}
+    .card input:focus{border-color:var(--red)}
+    .btn-join{width:100%;padding:13px;border:none;border-radius:10px;background:var(--red);color:#fff;font-family:'Fredoka One',cursive;font-size:1.1rem;cursor:pointer;box-shadow:0 4px 0 #a82a0a;transition:transform .1s,box-shadow .1s}
+    .btn-join:hover{transform:translateY(-2px);box-shadow:0 6px 0 #a82a0a}
+    .btn-join:active{transform:translateY(2px);box-shadow:0 2px 0 #a82a0a}
+
+    /* SUPABASE CONFIG NOTICE */
+    #configBox{background:#fff3e4;border:2px solid var(--yellow);border-radius:12px;padding:16px;margin-top:14px;text-align:left;font-size:.82rem;color:var(--ink);line-height:1.6}
+    #configBox strong{color:var(--red)}
+    #configBox code{background:var(--ink);color:var(--yellow);padding:1px 6px;border-radius:4px;font-size:.8rem}
+
+    /* GAME */
+    #gameScreen{display:none;flex:1;flex-direction:column;min-height:0}
+
+    #topStrip{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--ink);gap:10px;flex-wrap:wrap;border-bottom:3px solid var(--yellow)}
+    #roleLabel{font-family:'Fredoka One',cursive;font-size:1rem;color:var(--yellow)}
+    #wordDisplay{font-family:'Fredoka One',cursive;font-size:1.2rem;letter-spacing:3px;color:#fff}
+    #timerWrap{color:#aaa;font-size:.85rem;font-weight:700}
+    #timerWrap span{color:var(--yellow)}
+
+    .game-body{display:grid;grid-template-columns:1fr 290px;flex:1;overflow:hidden;min-height:0}
+    @media(max-width:680px){.game-body{grid-template-columns:1fr;grid-template-rows:1fr 250px}}
+
+    /* CANVAS */
+    .canvas-side{display:flex;flex-direction:column;gap:8px;padding:10px;background:var(--bg);min-height:0}
+    .toolbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 10px;background:var(--card);border-radius:var(--r);border:2px solid var(--border);box-shadow:var(--sh);transition:opacity .2s}
+    .toolbar.locked{opacity:.35;pointer-events:none}
+    .swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s,border-color .15s;flex-shrink:0}
+    .swatch:hover{transform:scale(1.25)}
+    .swatch.on{border-color:var(--ink);transform:scale(1.2)}
+    .sep{width:1px;height:22px;background:var(--border);margin:0 2px}
+    input[type=range].br{-webkit-appearance:none;width:70px;height:5px;border-radius:3px;background:var(--border);outline:none;cursor:pointer}
+    input[type=range].br::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--red);cursor:pointer}
+    .tbtn{padding:5px 10px;border-radius:8px;border:2px solid var(--border);background:var(--card);color:var(--ink);font-family:'Nunito',sans-serif;font-size:.78rem;font-weight:800;cursor:pointer;white-space:nowrap;transition:all .15s}
+    .tbtn:hover{border-color:var(--red);color:var(--red)}
+    .tbtn.on{background:var(--red);border-color:var(--red);color:#fff}
+    .tbtn.danger:hover{border-color:#c00;color:#c00}
+
+    .canvas-wrap{flex:1;border-radius:var(--r);overflow:hidden;background:#fff;touch-action:none;box-shadow:var(--sh);border:2px solid var(--border);min-height:160px}
+    #drawCanvas{display:block;width:100%;height:100%;cursor:crosshair}
+    #drawCanvas.ro{cursor:not-allowed}
+
+    #infoBar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--card);border-radius:var(--r);border:2px solid var(--border);font-size:.85rem;gap:10px;flex-wrap:wrap}
+    #infoBar .who{color:var(--muted)}
+    #infoBar .who strong{color:var(--green)}
+    #nextBtn{padding:7px 14px;border:none;border-radius:8px;background:var(--green);color:#fff;font-family:'Fredoka One',cursive;font-size:.9rem;cursor:pointer;box-shadow:0 3px 0 #0d6646;transition:transform .1s;display:none}
+    #nextBtn:hover{transform:translateY(-1px)}
+
+    /* SIDEBAR */
+    .sidebar{display:flex;flex-direction:column;background:var(--card);border-left:2px solid var(--border);min-height:0}
+    @media(max-width:680px){.sidebar{border-left:none;border-top:2px solid var(--border)}}
+    .tabs{display:flex;border-bottom:2px solid var(--border)}
+    .tab{flex:1;padding:10px;background:none;border:none;font-family:'Nunito',sans-serif;font-weight:800;font-size:.82rem;color:var(--muted);cursor:pointer;transition:color .15s}
+    .tab.on{color:var(--red);background:var(--bg);border-bottom:2px solid var(--red);margin-bottom:-2px}
+    #playersList{display:none;flex-direction:column;gap:5px;padding:10px;overflow-y:auto;flex:1}
+    #playersList.on{display:flex}
+    .pitem{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:var(--bg);font-size:.88rem}
+    .pdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+    .pname{flex:1;font-weight:700}
+    .pscore{color:var(--yellow);font-weight:800;font-size:.82rem}
+    #chatPane{display:flex;flex-direction:column;flex:1;min-height:0}
+    #chatMessages{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:5px}
+    .cmsg{font-size:.83rem;line-height:1.45;padding:6px 10px;border-radius:8px;background:var(--bg);animation:pop .18s ease}
+    .cmsg.correct{background:#e6faf3;border:1.5px solid var(--green)}
+    .cmsg.sys{background:none;color:var(--muted);font-style:italic;font-size:.78rem}
+    .cmsg .who{font-weight:800;margin-right:4px}
+    @keyframes pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+    .chat-row{display:flex;gap:6px;padding:8px;border-top:2px solid var(--border)}
+    .chat-row input{flex:1;padding:9px 12px;border-radius:8px;border:2px solid var(--border);background:var(--bg);color:var(--ink);font-family:'Nunito',sans-serif;font-size:.88rem;outline:none;transition:border-color .2s}
+    .chat-row input:focus{border-color:var(--red)}
+    .chat-row button{padding:9px 14px;border:none;border-radius:8px;background:var(--red);color:#fff;font-family:'Fredoka One',cursive;font-size:.95rem;cursor:pointer;box-shadow:0 3px 0 #a82a0a}
+
+    /* OVERLAY */
+    #overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .3s}
+    #overlay.show{opacity:1;pointer-events:auto}
+    .obox{background:#fff;border-radius:20px;padding:36px 28px;text-align:center;max-width:330px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.3)}
+    .obox .big{font-size:3rem;margin-bottom:10px}
+    .obox h2{font-family:'Fredoka One',cursive;font-size:1.7rem;color:var(--red);margin-bottom:8px}
+    .obox p{color:var(--muted);font-size:.9rem;line-height:1.5}
+    .obox .wrev{font-family:'Fredoka One',cursive;font-size:2rem;color:var(--green);margin:12px 0}
+    .obox button{margin-top:16px;padding:12px 28px;border:none;border-radius:10px;background:var(--red);color:#fff;font-family:'Fredoka One',cursive;font-size:1.1rem;cursor:pointer;box-shadow:0 4px 0 #a82a0a}
+
+    /* TOAST */
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(70px);background:var(--ink);color:#fff;padding:10px 20px;border-radius:999px;font-weight:800;font-size:.9rem;z-index:999;pointer-events:none;white-space:nowrap;transition:transform .28s cubic-bezier(.34,1.56,.64,1)}
+    #toast.show{transform:translateX(-50%) translateY(0)}
+
+    ::-webkit-scrollbar{width:4px}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🎨 <span>Piirrä &</span> Arvaa</div>
+  <div id="statusBar">Ei yhteydessä</div>
+</header>
+
+<!-- SETUP -->
+<div id="setupScreen">
+  <div class="card">
+    <div class="em">🖌️</div>
+    <h1>Piirrä & Arvaa</h1>
+    <p>Kirjoita nimesi ja liity peliin. Piirtäjä arvotaan automaattisesti!</p>
+    <input id="nameInput" type="text" placeholder="Nimesi..." maxlength="20" autocomplete="off"
+           onkeydown="if(event.key==='Enter')joinGame()"/>
+    <button class="btn-join" onclick="joinGame()">Liity peliin 🚀</button>
+
+    <!-- Näytetään jos Supabase-config puuttuu -->
+    <div id="configBox" style="display:none">
+      <strong>⚙️ Supabase-config puuttuu!</strong><br><br>
+      Avaa tämä tiedosto tekstieditorilla ja vaihda nämä rivit:<br><br>
+      <code>SUPABASE_URL</code> → oma URL<br>
+      <code>SUPABASE_KEY</code> → oma anon key<br><br>
+      Löydät ne: <strong>supabase.com → projekti → Settings → API</strong>
+    </div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="gameScreen">
+  <div id="topStrip">
+    <div id="roleLabel">–</div>
+    <div id="wordDisplay">–</div>
+    <div id="timerWrap">⏱ <span id="timerVal">–</span>s</div>
+  </div>
+
+  <div class="game-body">
+    <div class="canvas-side">
+      <div class="toolbar locked" id="toolbar">
+        <div id="colorRow"></div>
+        <div class="sep"></div>
+        <input type="range" class="br" id="brushSlider" min="2" max="40" value="6"/>
+        <div class="sep"></div>
+        <button class="tbtn" id="eraserBtn" onclick="toggleEraser()">🧹 Pyyhekumi</button>
+        <button class="tbtn danger" onclick="clearCanvas()">🗑️ Tyhjennä</button>
+      </div>
+      <div class="canvas-wrap"><canvas id="drawCanvas"></canvas></div>
+      <div id="infoBar">
+        <div class="who">Piirtäjä: <strong id="drawerLabel">–</strong></div>
+        <button id="nextBtn" onclick="requestNextRound()">🎲 Seuraava kierros</button>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="tabs">
+        <button class="tab on" onclick="showTab('chat')">💬 Chat</button>
+        <button class="tab"    onclick="showTab('players')">👥 Pelaajat</button>
+      </div>
+      <div id="playersList"></div>
+      <div id="chatPane">
+        <div id="chatMessages"></div>
+        <div class="chat-row">
+          <input id="chatInput" type="text" placeholder="Kirjoita arvauksesi..." maxlength="80"
+                 autocomplete="off" onkeydown="if(event.key==='Enter')sendChat()"/>
+          <button onclick="sendChat()">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="obox">
+    <div class="big" id="ovEmoji">🎲</div>
+    <h2 id="ovTitle">–</h2>
+    <div id="ovBody"></div>
+    <button onclick="closeOverlay()">Selvä! 👍</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================================================================
+   🔧 AINOA ASIA MITÄ SINUN TÄYTYY MUUTTAA:
+   1. Mene supabase.com → luo ilmainen tili
+   2. Luo uusi projekti
+   3. Mene Settings → API
+   4. Kopioi "Project URL" ja "anon public" key tähän:
+   ================================================================ */
+const SUPABASE_URL = "https://zcvjpzztvvnotonfjruv.supabase.co";
+const SUPABASE_KEY = "sb_publishable_K0VWTBJ-K8w9lGPPzfXPrA_eUCY7WKm";
+
+/* ================================================================
+   SUPABASE INIT
+   ================================================================ */
+const { createClient } = supabase;
+let sb = null;
+
+function initSupabase() {
+  if (SUPABASE_URL.includes("KOPIOI") || SUPABASE_KEY.includes("KOPIOI")) {
+    document.getElementById('configBox').style.display = 'block';
+    return false;
+  }
+  sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  return true;
+}
+
+/* ================================================================
+   SANASTO – arvotaan automaattisesti
+   ================================================================ */
+const WORDS = [
+  "koira","kissa","auto","talo","puu","kukka","aurinko","kuu","tähti","kala",
+  "lintu","jäätelö","pizza","kirja","polkupyörä","lentokone","laiva","bussi",
+  "omena","banaani","mansikka","porkkana","elefantti","tiikeri","karhu","kettu",
+  "sydän","silmä","käsi","jalka","hattu","kengät","housut","paita","reppu",
+  "puhelin","tietokone","televisio","kitara","rumpu","piano","linna","koulu",
+  "lumimies","sateenkaari","pilvi","ukkonen","lumi","sade","tuuli","tulipalo",
+  "miekka","kilpi","kruunu","aarre","kartta","jääkaappi","sohva","lamppu",
+];
+
+/* ================================================================
+   TILA
+   ================================================================ */
+let myName      = '';
+let myId        = 'p_' + Math.random().toString(36).slice(2, 9); // uniikki id
+let amIDrawer   = false;
+let currentWord = '';
+let color       = '#1a1208';
+let brushSize   = 6;
+let erasing     = false;
+let drawing     = false;
+let lx = 0, ly = 0;
+let timerIv     = null;
+let scores      = {};
+let players     = {}; // id → nimi
+let drawerName  = '';
+let channel     = null; // Supabase Realtime kanava
+
+/* ================================================================
+   CANVAS
+   ================================================================ */
+const canvas = document.getElementById('drawCanvas');
+const ctx    = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const w = canvas.parentElement.clientWidth;
+  const h = canvas.parentElement.clientHeight;
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  canvas.width = w; canvas.height = h;
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+  try { ctx.putImageData(img, 0, 0); } catch(e) {}
+}
+window.addEventListener('resize', resizeCanvas);
+
+/* ================================================================
+   VÄRIT
+   ================================================================ */
+const PALETTE = ['#1a1208','#ffffff','#e8441a','#f5a623','#f5e642',
+                 '#1a9e6e','#1a5fe8','#9b59b6','#e91e8c','#795548','#607d8b'];
+
+function buildPalette() {
+  const row = document.getElementById('colorRow');
+  row.innerHTML = '';
+  PALETTE.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'swatch' + (c === color ? ' on' : '');
+    d.style.cssText = `background:${c};` + (c==='#ffffff' ? 'outline:2px solid #ccc;outline-offset:-3px;' : '');
+    d.onclick = () => { color = c; erasing = false; document.getElementById('eraserBtn').classList.remove('on'); buildPalette(); };
+    row.appendChild(d);
+  });
+}
+
+function toggleEraser() {
+  erasing = !erasing;
+  document.getElementById('eraserBtn').classList.toggle('on', erasing);
+}
+document.getElementById('brushSlider').addEventListener('input', e => brushSize = +e.target.value);
+
+/* ================================================================
+   PIIRTÄMINEN
+   ================================================================ */
+function getPos(e) {
+  const r = canvas.getBoundingClientRect();
+  const sx = canvas.width / r.width, sy = canvas.height / r.height;
+  const s = e.touches ? e.touches[0] : e;
+  return [(s.clientX - r.left)*sx, (s.clientY - r.top)*sy];
+}
+
+canvas.addEventListener('mousedown',  e => { if (!amIDrawer) return; drawing=true; [lx,ly]=getPos(e); });
+canvas.addEventListener('mousemove',  e => { if (!amIDrawer||!drawing) return; doDraw(e); });
+canvas.addEventListener('mouseup',    () => drawing=false);
+canvas.addEventListener('mouseleave', () => drawing=false);
+canvas.addEventListener('touchstart', e => { if (!amIDrawer) return; e.preventDefault(); drawing=true; [lx,ly]=getPos(e); }, {passive:false});
+canvas.addEventListener('touchmove',  e => { if (!amIDrawer||!drawing) return; e.preventDefault(); doDraw(e); }, {passive:false});
+canvas.addEventListener('touchend',   () => drawing=false);
+
+function doDraw(e) {
+  const [x,y] = getPos(e);
+  const c = erasing ? '#ffffff' : color;
+  const s = erasing ? brushSize*3 : brushSize;
+  drawLine(lx, ly, x, y, c, s);
+  // Lähetä muille
+  broadcast('stroke', { x0:lx, y0:ly, x1:x, y1:y, color:c, size:s });
+  [lx,ly] = [x,y];
+}
+
+function drawLine(x0,y0,x1,y1,c,s) {
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1);
+  ctx.strokeStyle=c; ctx.lineWidth=s; ctx.lineCap=ctx.lineJoin='round'; ctx.stroke();
+}
+
+function clearCanvas() {
+  if (!amIDrawer) return;
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  broadcast('clear', {});
+}
+
+/* ================================================================
+   LIITY PELIIN
+   ================================================================ */
+function joinGame() {
+  if (!initSupabase()) return;
+  const n = document.getElementById('nameInput').value.trim();
+  if (!n) { showToast('Anna ensin nimesi!'); return; }
+  myName = n;
+
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display  = 'flex';
+  buildPalette();
+  resizeCanvas();
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  connectRealtime();
+}
+
+/* ================================================================
+   SUPABASE REALTIME – yksi kanava kaikelle
+   ================================================================ */
+function connectRealtime() {
+  // Kaikki pelaajat ovat samassa "piirra-arvaa"-kanavassa
+  channel = sb.channel('piirra-arvaa', {
+    config: { broadcast: { self: false } }
+  });
+
+  // Kuuntele kaikki tapahtumat
+  channel.on('broadcast', { event: '*' }, ({ event, payload }) => {
+    handleEvent(event, payload);
+  });
+
+  channel.subscribe(status => {
+    if (status === 'SUBSCRIBED') {
+      document.getElementById('statusBar').innerHTML = `Pelaajana: <b>${myName}</b> ✅`;
+
+      // Ilmoita muille liittymisestä
+      broadcast('join', { id: myId, name: myName });
+
+      // Pyydä nykyistä peliä (ensimmäinen pelaaja aloittaa kierroksen)
+      setTimeout(() => {
+        broadcast('requestState', { id: myId, name: myName });
+        // Jos ei vastausta 2s sisällä → olet ensimmäinen, aloita kierros
+        setTimeout(() => {
+          if (!drawerName) startRound();
+        }, 2000);
+      }, 500);
+    }
+    if (status === 'CHANNEL_ERROR') {
+      document.getElementById('statusBar').innerHTML = `<span style="color:#f88">Yhteys katkesi – ladataan...</span>`;
+    }
+  });
+}
+
+// Lähetä tapahtuma kaikille kanavassa
+function broadcast(event, payload) {
+  if (!channel) return;
+  channel.send({ type:'broadcast', event, payload: { ...payload, _sender: myId } });
+}
+
+/* ================================================================
+   TAPAHTUMIEN KÄSITTELY
+   ================================================================ */
+function handleEvent(event, payload) {
+  // Älä käsittele omia viestejä (paitsi join/leave)
+  const fromMe = payload._sender === myId;
+
+  switch(event) {
+
+    case 'join':
+      // Uusi pelaaja liittyi
+      players[payload.id] = payload.name;
+      scores[payload.name] = scores[payload.name] || 0;
+      renderPlayers();
+      appendSystem(`${payload.name} liittyi peliin 👋`);
+      // Jos minä olen piirtäjä, lähetä tila uudelle pelaajalle
+      if (amIDrawer) {
+        broadcast('stateSync', {
+          targetId: payload.id,
+          drawerName: myName,
+          drawerId: myId,
+          word: currentWord,
+          maskedWord: maskWord(currentWord),
+          players,
+          scores,
+          timerEnd: timerEnd,
+        });
+      }
+      break;
+
+    case 'leave':
+      const leaveName = players[payload.id];
+      delete players[payload.id];
+      renderPlayers();
+      if (leaveName) appendSystem(`${leaveName} poistui pelistä`);
+      break;
+
+    case 'requestState':
+      // Joku pyytää tilaa – piirtäjä vastaa
+      players[payload.id] = payload.name;
+      scores[payload.name] = scores[payload.name] || 0;
+      renderPlayers();
+      if (amIDrawer) {
+        broadcast('stateSync', {
+          targetId: payload.id,
+          drawerName: myName,
+          drawerId: myId,
+          word: currentWord,
+          maskedWord: maskWord(currentWord),
+          players, scores,
+          timerEnd,
+        });
+      }
+      break;
+
+    case 'stateSync':
+      // Vastaanotettu tila – vain jos minulle tarkoitettu
+      if (payload.targetId !== myId) return;
+      players = payload.players || {};
+      Object.assign(scores, payload.scores || {});
+      renderPlayers();
+      applyRound({
+        drawerName: payload.drawerName,
+        drawerId:   payload.drawerId,
+        word:       payload.drawerId === myId ? payload.word : payload.maskedWord,
+        maskedWord: payload.maskedWord,
+      });
+      if (payload.timerEnd) startTimer(payload.timerEnd);
+      break;
+
+    case 'round':
+      if (fromMe) return;
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      applyRound(payload);
+      if (payload.timerEnd) startTimer(payload.timerEnd);
+      showOverlay(payload);
+      break;
+
+    case 'stroke':
+      if (fromMe) return;
+      drawLine(payload.x0, payload.y0, payload.x1, payload.y1, payload.color, payload.size);
+      break;
+
+    case 'clear':
+      if (fromMe) return;
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      break;
+
+    case 'chat':
+      if (fromMe) return;
+      const correct = currentWord &&
+        payload.text.trim().toLowerCase().replace(/\s/g,'') ===
+        currentWord.toLowerCase().replace(/\s/g,'');
+      appendChat(payload.author, payload.text, correct);
+      if (correct) {
+        scores[payload.author] = (scores[payload.author]||0) + 10;
+        renderPlayers();
+        showToast(`🎉 ${payload.author} arvasi oikein! +10 pts`);
+        setTimeout(() => startRound(), 3000);
+      }
+      break;
+
+    case 'nextRound':
+      if (fromMe) return;
+      startRound();
+      break;
+  }
+}
+
+/* ================================================================
+   KIERROS
+   ================================================================ */
+let timerEnd = null;
+
+function startRound() {
+  // Kerää kaikki tiedossa olevat pelaajat + minä
+  players[myId] = myName;
+  const ids    = Object.keys(players);
+  const drawerId   = ids[Math.floor(Math.random() * ids.length)];
+  const dName      = players[drawerId];
+  const word       = WORDS[Math.floor(Math.random() * WORDS.length)];
+  const masked     = maskWord(word);
+  timerEnd         = Date.now() + 3 * 60 * 1000;
+
+  const roundData = {
+    drawerId,
+    drawerName: dName,
+    word,
+    maskedWord: masked,
+    timerEnd,
+  };
+
+  // Lähetä kaikille (he saavat maskedWord)
+  broadcast('round', { ...roundData, word: masked });
+
+  // Itse käytä oikeaa sanaa jos olen piirtäjä
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  applyRound(roundData);
+  startTimer(timerEnd);
+  showOverlay(roundData);
+}
+
+function applyRound(round) {
+  if (!round) return;
+  amIDrawer  = (round.drawerId === myId);
+  drawerName = round.drawerName || '–';
+  currentWord = amIDrawer ? round.word : (round.maskedWord || '–');
+
+  document.getElementById('wordDisplay').textContent = currentWord;
+  document.getElementById('roleLabel').textContent   = amIDrawer ? '✏️ Sinä piirrät!' : '👀 Arvaa sana!';
+  document.getElementById('drawerLabel').textContent = drawerName;
+  document.getElementById('toolbar').classList.toggle('locked', !amIDrawer);
+  canvas.classList.toggle('ro', !amIDrawer);
+  document.getElementById('nextBtn').style.display = amIDrawer ? 'block' : 'none';
+}
+
+function requestNextRound() {
+  if (!amIDrawer) return;
+  broadcast('nextRound', {});
+  startRound();
+}
+
+function maskWord(w) {
+  return w.split('').map(c => c===' ' ? '  ' : '_').join(' ');
+}
+
+/* ================================================================
+   OVERLAY
+   ================================================================ */
+function showOverlay(round) {
+  const isMe = round.drawerId === myId;
+  document.getElementById('ovEmoji').textContent = isMe ? '🖌️' : '🎲';
+  document.getElementById('ovTitle').textContent = isMe ? 'Sinä piirrät!' : `${round.drawerName} piirtää!`;
+  document.getElementById('ovBody').innerHTML    = isMe
+    ? `<p>Piirrettävä sana:</p><div class="wrev">${round.word}</div><p>Älä kirjoita sanaa chattiin!</p>`
+    : `<p>Yritä arvata mitä piirretään – kirjoita chatissa!</p>`;
+  document.getElementById('overlay').classList.add('show');
+}
+function closeOverlay() { document.getElementById('overlay').classList.remove('show'); }
+
+/* ================================================================
+   CHAT
+   ================================================================ */
+function sendChat() {
+  const inp = document.getElementById('chatInput');
+  const txt = inp.value.trim();
+  if (!txt) return;
+  inp.value = '';
+
+  // Tarkista oma arvaus
+  const correct = currentWord &&
+    txt.trim().toLowerCase().replace(/\s/g,'') ===
+    currentWord.toLowerCase().replace(/\s/g,'');
+
+  appendChat(myName, txt, correct);
+  broadcast('chat', { author: myName, text: txt });
+
+  if (correct) {
+    scores[myName] = (scores[myName]||0) + 10;
+    renderPlayers();
+    showToast('🎉 Oikein! +10 pistettä');
+    setTimeout(() => startRound(), 3000);
+  }
+}
+
+function appendChat(author, text, correct) {
+  const box = document.getElementById('chatMessages');
+  const d   = document.createElement('div');
+  d.className = 'cmsg' + (correct ? ' correct' : '');
+  d.innerHTML = `<span class="who" style="color:${colorFor(author)}">${esc(author)}:</span>${esc(text)}${correct?' ✅':''}`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+function appendSystem(text) {
+  const box = document.getElementById('chatMessages');
+  const d   = document.createElement('div');
+  d.className = 'cmsg sys';
+  d.textContent = text;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ================================================================
+   PELAAJAT
+   ================================================================ */
+function renderPlayers() {
+  players[myId] = myName;
+  const list = document.getElementById('playersList');
+  list.innerHTML = '';
+  Object.entries(players)
+    .sort(([,a],[,b]) => (scores[b]||0)-(scores[a]||0))
+    .forEach(([id, name]) => {
+      const d = document.createElement('div');
+      d.className = 'pitem';
+      d.innerHTML =
+        `<div class="pdot" style="background:${colorFor(name)}"></div>` +
+        `<div class="pname">${esc(name)}${id===myId?' (sinä)':''}</div>` +
+        `<div class="pscore">${scores[name]||0} pts</div>`;
+      list.appendChild(d);
+    });
+}
+
+/* ================================================================
+   TIMER
+   ================================================================ */
+function startTimer(endTs) {
+  clearInterval(timerIv);
+  timerIv = setInterval(() => {
+    const left = Math.max(0, Math.round((endTs-Date.now())/1000));
+    document.getElementById('timerVal').textContent = left;
+    if (left===0) clearInterval(timerIv);
+  }, 1000);
+}
+
+/* ================================================================
+   TABS / APUJA
+   ================================================================ */
+function showTab(t) {
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('on',i===(t==='chat'?0:1)));
+  document.getElementById('chatPane').style.display = t==='chat' ? 'flex' : 'none';
+  document.getElementById('playersList').classList.toggle('on', t==='players');
+}
+
+function colorFor(name) {
+  let h=0; for (const c of name) h=(h*31+c.charCodeAt(0))%360;
+  return `hsl(${h},65%,42%)`;
+}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// Ilmoita poistumisesta
+window.addEventListener('beforeunload', () => broadcast('leave', { id:myId, name:myName }));
+</script>
+</body>
+</html>
